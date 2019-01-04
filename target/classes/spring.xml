@@ -1,0 +1,104 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context" xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+       http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+       http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd">
+    <context:component-scan base-package="com.bwjf"></context:component-scan>
+
+    <context:property-placeholder  ignore-unresolvable="true" location="classpath:jdbc.properties"></context:property-placeholder>
+   <!--整合Mybatis-->
+    <!-- 整合数据源-->
+    <bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource">
+        <property name="driverClassName" value="${driver}"></property>
+        <property name="url" value="${url}"></property>
+        <property name="username" value="${user}"></property>
+        <property name="password" value="${password}"></property>
+    </bean>
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <property name="dataSource" ref="dataSource"></property>
+        <property name="configLocation" value="classpath:mybatis.xml"></property>
+    </bean>
+    <!--配置自动扫描的Mapper类-->
+    <bean name="basePackage" class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="basePackage" value="com.bwjf.mapper"></property>
+        <!--拿到工厂-->
+        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory"></property>
+
+    </bean>
+    <!--整合Mybatis结束-->
+
+
+    <!--配置事物开始-->
+    <!--事物管理器对象-->
+    <bean id="dataSourceTransactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="dataSource"></property>
+    </bean>
+    <!--事物增强-->
+    <tx:advice id="transactionInterceptor" transaction-manager="dataSourceTransactionManager">
+        <tx:attributes>
+            <tx:method name="*" propagation="REQUIRED"/>
+        </tx:attributes>
+    </tx:advice>
+    <!--使用Aop将事物切到-->
+    <aop:config>
+        <aop:pointcut id="service" expression="execution(* com.bwjf.service..*(..))"></aop:pointcut>
+        <aop:advisor advice-ref="transactionInterceptor" pointcut-ref="service"></aop:advisor>
+    </aop:config>
+    <!--配置事物结束-->
+    <!--整合shiro框架-->
+    <!--1.配置SecurityManager-->
+    <bean class="org.apache.shiro.web.mgt.DefaultWebSecurityManager" id="securityManager">
+       <property name="cacheManager" ref="cacheManager" />
+        <property name="realm" ref="jdbcRealm" />
+     </bean>
+    <bean id="secureRemoteInvocationExecutor" class="org.apache.shiro.spring.remoting.SecureRemoteInvocationExecutor">
+        <property name="securityManager" ref="securityManager" />
+    </bean>
+
+
+
+    <!--2.配置realm-->
+    <bean class="com.bwjf.shiro.AuthRealm" id="jdbcRealm">
+        <property name="credentialsMatcher">
+            <bean class="org.apache.shiro.authc.credential.HashedCredentialsMatcher">
+                <property name="hashAlgorithmName" value="MD5"></property>
+            </bean>
+        </property>
+    </bean>
+
+    <!-- 缓存管理器 使用Ehcache实现 -->
+    <bean id="cacheManager" class="org.apache.shiro.cache.ehcache.EhCacheManager">
+        <property name="cacheManagerConfigFile" value="classpath:ehcache.xml"/>
+    </bean>
+
+    <!--3.配置shiro过滤器-->
+    <!-- 这是一个实例，管理shiro-->
+    <bean id="lifecycleBeanPostProcessor" class="org.apache.shiro.spring.LifecycleBeanPostProcessor"/>
+
+    <!-- shrioFilter与web.xml中配置的name要下相同-->
+    <bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+        <property name="securityManager" ref="securityManager"/>
+        <property name="loginUrl" value="/loginView"/>
+        <property name="successUrl" value="/index"/>
+        <property name="unauthorizedUrl" value="/error.jsp"/>
+        <!--
+            配置需要受保护的页面
+            以及访问这些页面需要的权限
+            1) anon可以匿名访问的页面
+            2) authc 必须认证(登录)后才可以访问的页面
+        -->
+        <property name="filterChainDefinitions">
+            <value>
+                <!--加载静态资源-->
+                /static/** = anon
+                /login = anon
+                /login.jsp = anon
+                /logout = logout
+                <!--除以上配置外，其他请求全部必须认证-->
+                /** = authc
+            </value>
+        </property>
+    </bean>
+</beans>
